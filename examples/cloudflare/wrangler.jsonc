@@ -16,8 +16,23 @@
   "durable_objects": {
     "bindings": [
       { "name": "PLANS", "class_name": "PlanVault" },
-      { "name": "RELAY", "class_name": "RelayContainer" }
+      { "name": "RELAY", "class_name": "RelayContainer" },
+      { "name": "SESSIONS", "class_name": "AgentSession" }
     ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PlanVault", "RelayContainer"] }]
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["PlanVault", "RelayContainer"] },
+    { "tag": "v2", "new_sqlite_classes": ["AgentSession"] }
+  ],
+  "vars": {
+    "RECOVERY_DELAY_MS": "5000",
+    "EVENT_STREAM_KEEPALIVE_MS": "5000",
+    "EVENT_PAGE_SIZE": "128",
+    "EVENT_TAIL_BYTES": "4194304",
+    "EVENT_COALESCE_MS": "100",
+    "MODEL_SOCKET_LINGER_MS": "30000",
+    "RUNTIME_MEMORY_BUDGET_BYTES": "67108864",
+    "REMOTE_MAX_FRAME_BYTES": "1048576",
+    "REMOTE_TIMEOUT_MS": "30000"
+  }
 }

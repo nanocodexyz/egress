@@ -1,7 +1,8 @@
 import { Egress, PlanVault } from 'nanocode-egress/cloudflare'
 import { RelayContainer, relay } from 'nanocode-egress/cloudflare/container'
+import { App } from 'nanocode-ts/cloudflare'
 
-type Env = {
+type Env = App.Env & {
   PLANS: DurableObjectNamespace<PlanVault>
   RELAY: DurableObjectNamespace<RelayContainer>
   PLAN_SECRET: string
@@ -30,6 +31,9 @@ function account(request: Request, env: Env): string | null {
 
 const routes = Egress.routes<Env>({ plans, account })
 
+const nanocode = App.create<Env>({ authenticate: account, egress, subscription: Egress.subscription({ plans }) })
+
+export const { AgentSession } = nanocode
 export { PlanVault, RelayContainer }
 
 export default {
@@ -37,6 +41,7 @@ export default {
     const routed = await routes(request, env)
     if (routed) return routed
     const url = new URL(request.url)
+    if (url.pathname.startsWith('/sessions/')) return nanocode.fetch(request, env)
     if (url.pathname !== '/probe' && url.pathname !== '/probe-socket') return new Response('not found', { status: 404 })
     const name = account(request, env)
     if (!name || request.method !== 'POST') return new Response('unauthorized', { status: 401 })
