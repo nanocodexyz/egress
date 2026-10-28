@@ -1,0 +1,16 @@
+{
+  "name": "nanocode-egress-example-vercel",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "dependencies": {
+    "nanocode-egress": "file:../..",
+    "undici": "7.30.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "typescript": "6.0.2"
+  }
+}

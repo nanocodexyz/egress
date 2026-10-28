@@ -24,10 +24,16 @@
     "./relay": {
       "types": "./dist/relay/index.d.ts",
       "default": "./dist/relay/index.js"
+    },
+    "./cloudflare/container": {
+      "types": "./dist/cloudflare/RelayContainer.d.ts",
+      "default": "./dist/cloudflare/RelayContainer.js"
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "relay.Dockerfile",
+    "relay.Dockerfile.dockerignore"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cloudflare.build.json",
@@ -36,6 +42,7 @@
     "test": "node --test --test-reporter=spec 'test/*.test.ts'"
   },
   "peerDependencies": {
+    "@cloudflare/containers": ">=0.3.0",
     "undici": ">=7.0.0",
     "ws": ">=8.0.0"
   },
@@ -45,9 +52,13 @@
     },
     "ws": {
       "optional": true
+    },
+    "@cloudflare/containers": {
+      "optional": true
     }
   },
   "devDependencies": {
+    "@cloudflare/containers": "^0.3.7",
     "@cloudflare/workers-types": "5.20261016.1",
     "@types/node": "22.20.5",
     "@types/ws": "^8.18.2",

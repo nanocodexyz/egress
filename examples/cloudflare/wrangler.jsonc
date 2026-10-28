@@ -3,7 +3,21 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
-  "workers_dev": false,
-  "durable_objects": { "bindings": [{ "name": "PLANS", "class_name": "PlanVault" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PlanVault"] }]
+  "workers_dev": true,
+  "containers": [
+    {
+      "class_name": "RelayContainer",
+      "image": "../../relay.Dockerfile",
+      "image_build_context": "../..",
+      "instance_type": "lite",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "PLANS", "class_name": "PlanVault" },
+      { "name": "RELAY", "class_name": "RelayContainer" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PlanVault", "RelayContainer"] }]
 }
