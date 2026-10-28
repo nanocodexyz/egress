@@ -92,6 +92,26 @@ test('a 401 refreshes the credential and retries the request once', async () => 
   assert.equal(calls, 2)
 })
 
+test('responses whose body fetch decoded drop their content-encoding', async () => {
+  const fake = server({
+    'POST https://api.anthropic.com/v1/messages': () =>
+      new Response('event: ping\n\n', { headers: { 'content-encoding': 'gzip', 'content-type': 'text/event-stream' } }),
+    'POST https://api.anthropic.com/v1/messages/count_tokens': () =>
+      new Response('raw', { headers: { 'content-encoding': 'zstd' } }),
+  })
+  const send = (endpoint: string) =>
+    Egress.send(account(), { provider: 'claude', endpoint, headers: [['accept-encoding', 'zstd']], body: new Uint8Array([1]) }, { fetch: fake.fetch })
+
+  const decoded = await send('https://api.anthropic.com/v1/messages?beta=true')
+  assert.equal(decoded.headers.get('content-encoding'), null)
+  assert.equal(decoded.headers.get('content-type'), 'text/event-stream')
+  assert.equal(await decoded.text(), 'event: ping\n\n')
+  assert.equal(fake.requests[0]?.headers.get('accept-encoding'), null)
+
+  const undecoded = await send('https://api.anthropic.com/v1/messages/count_tokens?beta=true')
+  assert.equal(undecoded.headers.get('content-encoding'), 'zstd')
+})
+
 test('the Cloudflare binding sends plan dispatches with the account credential and the rest to the fallback', async () => {
   const plans = account()
   const seen: string[] = []

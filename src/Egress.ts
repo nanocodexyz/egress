@@ -14,7 +14,10 @@ const destinations: Record<Plans.Provider, { origin: string; paths: readonly str
   codex: { origin: 'https://chatgpt.com', paths: ['/backend-api/codex/responses', '/backend-api/codex/responses/compact'] },
 }
 
+const decodable = new Set(['gzip', 'x-gzip', 'deflate', 'br'])
+
 const dropped = new Set([
+  'accept-encoding',
   'authorization',
   'x-api-key',
   'cookie',
@@ -69,7 +72,10 @@ export function destination(provider: Plans.Provider, endpoint: string): URL {
   return url
 }
 
-/** Returns the request headers without credentials, cookies or hop-by-hop headers, merged with `injection`. */
+/**
+ * Returns the request headers without credentials, cookies, hop-by-hop headers or `accept-encoding`, merged with
+ * `injection`. The runtime's `fetch` then asks only for the encodings it decodes.
+ */
 export function headers(incoming: Iterable<[string, string]>, injection: Plans.Injection): Headers {
   const merged = new Headers()
   for (const [name, value] of incoming) if (!dropped.has(name.toLowerCase())) merged.append(name, value)
@@ -127,10 +133,21 @@ export async function socket(
 }
 
 function guard(response: Response): Response {
-  if (response.status < 300 || response.status >= 400) return response
+  if (response.status < 300 || response.status >= 400) return decoded(response)
   void response.body?.cancel().catch(() => undefined)
   return Response.json(
     { error: { type: 'api_error', message: `the provider redirected a plan request (HTTP ${response.status})` } },
     { status: 502 },
   )
+}
+
+function decoded(response: Response): Response {
+  const codings = (response.headers.get('content-encoding') ?? '')
+    .split(',')
+    .map((coding) => coding.trim().toLowerCase())
+    .filter(Boolean)
+  if (codings.length === 0 || !codings.every((coding) => decodable.has(coding))) return response
+  const headers = new Headers(response.headers)
+  for (const name of ['content-encoding', 'content-length', 'transfer-encoding']) headers.delete(name)
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
 }
