@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "description": "Run nanocode-ts agents on a user's ChatGPT or Claude plan: sign-in, sealed credentials, and the egress that injects them, for Cloudflare Workers and Vercel",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nanocodexyz/egress.git"
+  },
   "type": "module",
   "engines": {
     "node": ">=22.18.0"
@@ -33,7 +38,9 @@
   "files": [
     "dist",
     "relay.Dockerfile",
-    "relay.Dockerfile.dockerignore"
+    "relay.Dockerfile.dockerignore",
+    "LICENSE-APACHE",
+    "LICENSE-MIT"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cloudflare.build.json",
