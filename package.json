@@ -1,0 +1,48 @@
+{
+  "name": "nanocode-egress",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Run nanocode-ts agents on a user's ChatGPT or Claude plan: sign-in, sealed credentials, and the egress that injects them, for Cloudflare Workers and Vercel",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./cloudflare": {
+      "types": "./dist/cloudflare/index.d.ts",
+      "default": "./dist/cloudflare/index.js"
+    },
+    "./vercel": {
+      "types": "./dist/vercel/index.d.ts",
+      "default": "./dist/vercel/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.cloudflare.build.json",
+    "prepare": "npm run build",
+    "check:types": "tsc --noEmit && tsc --noEmit -p tsconfig.cloudflare.json && tsc --noEmit -p tsconfig.test.json",
+    "test": "node --test --test-reporter=spec 'test/*.test.ts'"
+  },
+  "peerDependencies": {
+    "undici": ">=7.0.0"
+  },
+  "peerDependenciesMeta": {
+    "undici": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261016.1",
+    "@types/node": "22.20.5",
+    "typescript": "6.0.2",
+    "undici": "7.30.1"
+  }
+}
