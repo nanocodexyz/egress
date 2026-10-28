@@ -9,7 +9,7 @@
   "dependencies": {
     "@cloudflare/containers": "^0.3.7",
     "nanocode-egress": "file:../..",
-    "nanocode-ts": "https://github.com/gakonst/nanocode-ts/releases/download/build-3bd6398/nanocode-ts-3bd6398.tgz"
+    "nanocode-ts": "https://github.com/gakonst/nanocode-ts/releases/download/build-6cbf34b/nanocode-ts-6cbf34b.tgz"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261028.1",
