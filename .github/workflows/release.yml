@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.sha }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Check
+        run: npm run check:types && npm test
+
+      - name: Pack
+        id: pack
+        run: |
+          short="${GITHUB_SHA::7}"
+          tarball="$(npm pack --ignore-scripts --silent --pack-destination "$RUNNER_TEMP")"
+          mv "$RUNNER_TEMP/$tarball" "$RUNNER_TEMP/nanocode-egress-$short.tgz"
+          echo "short=$short" >> "$GITHUB_OUTPUT"
+          echo "path=$RUNNER_TEMP/nanocode-egress-$short.tgz" >> "$GITHUB_OUTPUT"
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "build-${{ steps.pack.outputs.short }}" "${{ steps.pack.outputs.path }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "nanocode-egress ${{ steps.pack.outputs.short }}" \
+            --notes "Built from $GITHUB_SHA. Install with \`npm install https://github.com/$GITHUB_REPOSITORY/releases/download/build-${{ steps.pack.outputs.short }}/nanocode-egress-${{ steps.pack.outputs.short }}.tgz\`."

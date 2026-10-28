@@ -112,21 +112,25 @@ test('responses whose body fetch decoded drop their content-encoding', async () 
   assert.equal(undecoded.headers.get('content-encoding'), 'zstd')
 })
 
-test('the Cloudflare binding sends plan dispatches with the account credential and the rest to the fallback', async () => {
+test('the Cloudflare binding sends plan dispatches with the account credential, ChatGPT plans only through a relay, and the rest to the fallback', async () => {
   const plans = account()
   const seen: string[] = []
-  const original = globalThis.fetch
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    seen.push(`${String(input)} ${new Headers(init?.headers).get('authorization')}`)
-    return Response.json({ upstream: true })
-  }) as typeof fetch
-  try {
+  const options = {
+    plans: (_env: object, name: string) => {
+      assert.equal(name, 'visitor-1')
+      return plans
+    },
+    fallback: () => ({ fetch: async () => Response.json({ fallback: true }) }),
+  }
+  {
     const egress = Cloudflare.binding<object>({
-      plans: (_env, name) => {
-        assert.equal(name, 'visitor-1')
-        return plans
-      },
-      fallback: () => ({ fetch: async () => Response.json({ fallback: true }) }),
+      ...options,
+      relay: () => ({
+        fetch: async (request) => {
+          seen.push(`${request.url} ${request.headers.get('authorization')}`)
+          return Response.json({ upstream: true })
+        },
+      }),
     })({})
     const dispatch = (subscription: boolean) =>
       new Request('https://egress.internal/model', {
@@ -148,8 +152,18 @@ test('the Cloudflare binding sends plan dispatches with the account credential a
     assert.deepEqual(await (await egress.fetch(dispatch(false))).json(), { fallback: true })
     assert.equal(await Cloudflare.subscription({ plans: () => plans })('visitor-1', {}, 'codex'), true)
     assert.equal(await Cloudflare.subscription({ plans: () => plans })('visitor-1', {}, 'claude'), false)
-  } finally {
-    globalThis.fetch = original
+
+    const unrelayed = Cloudflare.binding<object>(options)({})
+    const refused = await unrelayed.fetch(dispatch(true))
+    assert.equal(refused.status, 503)
+    assert.match(((await refused.json()) as { error: { message: string } }).error.message, /relay container/)
+    const socket = await unrelayed.fetch(
+      new Request('https://egress.internal/socket', {
+        headers: { 'x-nanocode-socket': JSON.stringify({ provider: 'codex', authority: { account_id: 'visitor-1' }, headers: [] }) },
+      }),
+    )
+    assert.equal(socket.status, 503)
+    assert.equal(seen.length, 1)
   }
 })
 

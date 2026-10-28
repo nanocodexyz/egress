@@ -6,8 +6,6 @@ type Env = App.Env & {
   PLANS: DurableObjectNamespace<PlanVault>
   RELAY: DurableObjectNamespace<RelayContainer>
   PLAN_SECRET: string
-  RELAY_SECRET: string
-  RELAY_URL?: string
   DEMO_TOKEN?: string
 }
 
@@ -15,10 +13,7 @@ const plans = Egress.durable<Env>((env) => env.PLANS)
 
 const egress = Egress.binding<Env>({
   plans,
-  relay: (env) =>
-    env.RELAY_URL
-      ? Egress.relay({ url: env.RELAY_URL, secret: env.RELAY_SECRET })
-      : relay(env.RELAY, { secret: env.RELAY_SECRET }),
+  relay: (env) => relay(env.RELAY, { secret: env.PLAN_SECRET }),
 })
 
 function account(request: Request, env: Env): string | null {

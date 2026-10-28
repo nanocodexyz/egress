@@ -92,6 +92,7 @@ export function binding<E>(options: binding.Options<E>): (env: E) => PrivateBind
           if (!dispatch.subscription) return forward(request)
 
           const provider = dispatch.provider ?? 'claude'
+          if (provider === 'codex' && !relayed) return failure('codex', 503, unrelayed)
           try {
             return await Core.send(
               options.plans(env, dispatch.authority.account_id),
@@ -111,6 +112,7 @@ export function binding<E>(options: binding.Options<E>): (env: E) => PrivateBind
           const dispatch = header<SocketDispatch>(request, 'x-nanocode-socket')
           if (!dispatch) return failure('codex', 400, 'invalid socket dispatch')
           if ((dispatch.provider ?? 'codex') !== 'codex') return forward(request)
+          if (!relayed) return failure('codex', 503, unrelayed)
           try {
             return await socket(options.plans(env, dispatch.authority.account_id), dispatch.headers, relayed)
           } catch (error) {
@@ -131,7 +133,11 @@ export declare namespace binding {
     plans(env: E, account: string): Plans.Account
     /** Returns the binding of requests that use no plan, such as the AI Gateway's. */
     fallback?(env: E): PrivateBinding
-    /** Returns the relay of ChatGPT-plan requests and sockets, such as `relay({ url, secret })`. Claude plans go direct. */
+    /**
+     * Returns the relay of ChatGPT-plan requests and sockets: the `RelayContainer`'s (`relay` from
+     * `nanocode-egress/cloudflare/container`) or a relay elsewhere (`relay({ url, secret })`). Without one, ChatGPT-plan
+     * requests fail with a message that names this setup. Claude plans go direct.
+     */
     relay?(env: E): Relay | undefined
   }
 }
@@ -170,12 +176,14 @@ export declare namespace routes {
   }
 }
 
-async function socket(account: Plans.Account, incoming: [string, string][], relayed: Relay | undefined): Promise<Response> {
+const unrelayed =
+  'ChatGPT plans on Cloudflare need the relay container, because chatgpt.com refuses requests from Workers: export RelayContainer from nanocode-egress/cloudflare/container, list it under containers and durable_objects in wrangler.jsonc, and pass relay to Egress.binding'
+
+async function socket(account: Plans.Account, incoming: [string, string][], relayed: Relay): Promise<Response> {
   const open = async () => {
     const target = await Core.socket(account, incoming)
     target.headers.set('upgrade', 'websocket')
-    const request = new Request(target.url, { headers: target.headers })
-    return { response: await (relayed ? relayed.fetch(request) : fetch(request)), generation: target.generation }
+    return { response: await relayed.fetch(new Request(target.url, { headers: target.headers })), generation: target.generation }
   }
   const first = await open()
   if (first.response.status !== 401) return first.response
