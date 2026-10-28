@@ -27,6 +27,38 @@ type SocketDispatch = {
   headers: [string, string][]
 }
 
+/**
+ * Relay that ChatGPT-plan requests leave through: chatgpt.com's edge answers HTTP 403 to every request that carries
+ * the `cf-worker` header, which Workers adds to each subrequest, while it serves the same request from Node.
+ * Claude plans need none.
+ */
+export type Relay = { fetch(request: Request): Promise<Response> }
+
+/** Returns the relay at `options.url`, a `nanocode-egress/relay` server, reached with `options.secret` through `options.fetcher`, such as a Container's. */
+export function relay(options: relay.Options): Relay {
+  const base = new URL(options.url)
+  return {
+    fetch(request) {
+      const source = new URL(request.url)
+      const target = new URL(source.pathname + source.search, base)
+      const forwarded = new Request(target, request)
+      forwarded.headers.set('x-nanocode-relay-secret', options.secret)
+      return options.fetcher ? options.fetcher.fetch(forwarded) : fetch(forwarded)
+    },
+  }
+}
+
+export declare namespace relay {
+  type Options = {
+    /** Base URL of the relay, such as `https://relay.example`, or any URL when `fetcher` routes it, as a Container's does. */
+    url: string
+    /** Secret the relay was started with. */
+    secret: string
+    /** Fetcher that reaches the relay, such as a Container stub. Defaults to the global `fetch`. */
+    fetcher?: { fetch(request: Request): Promise<Response> } | undefined
+  }
+}
+
 /** Durable Object namespace of `PlanVault`s, as Workers binds it. */
 export type Namespace = { idFromName(name: string): unknown; get(id: never): unknown }
 
@@ -42,6 +74,10 @@ export function durable<E>(namespace: (env: E) => Namespace): (env: E, account: 
 export function binding<E>(options: binding.Options<E>): (env: E) => PrivateBinding {
   return (env) => {
     const fallback = options.fallback?.(env)
+    const relayed = options.relay?.(env)
+    const codexFetch = relayed
+      ? (input: string, init: RequestInit) => relayed.fetch(new Request(input, init))
+      : undefined
     const forward = (request: Request): Promise<Response> =>
       fallback
         ? fallback.fetch(request)
@@ -65,7 +101,7 @@ export function binding<E>(options: binding.Options<E>): (env: E) => PrivateBind
                 headers: dispatch.headers,
                 body: new Uint8Array(await request.arrayBuffer()),
               },
-              { signal: request.signal },
+              { signal: request.signal, ...(provider === 'codex' && codexFetch ? { fetch: codexFetch } : {}) },
             )
           } catch (error) {
             return planFailure(provider, error)
@@ -76,7 +112,7 @@ export function binding<E>(options: binding.Options<E>): (env: E) => PrivateBind
           if (!dispatch) return failure('codex', 400, 'invalid socket dispatch')
           if ((dispatch.provider ?? 'codex') !== 'codex') return forward(request)
           try {
-            return await socket(options.plans(env, dispatch.authority.account_id), dispatch.headers)
+            return await socket(options.plans(env, dispatch.authority.account_id), dispatch.headers, relayed)
           } catch (error) {
             return planFailure('codex', error)
           }
@@ -95,6 +131,8 @@ export declare namespace binding {
     plans(env: E, account: string): Plans.Account
     /** Returns the binding of requests that use no plan, such as the AI Gateway's. */
     fallback?(env: E): PrivateBinding
+    /** Returns the relay of ChatGPT-plan requests and sockets, such as `relay({ url, secret })`. Claude plans go direct. */
+    relay?(env: E): Relay | undefined
   }
 }
 
@@ -132,11 +170,12 @@ export declare namespace routes {
   }
 }
 
-async function socket(account: Plans.Account, incoming: [string, string][]): Promise<Response> {
+async function socket(account: Plans.Account, incoming: [string, string][], relayed: Relay | undefined): Promise<Response> {
   const open = async () => {
     const target = await Core.socket(account, incoming)
     target.headers.set('upgrade', 'websocket')
-    return { response: await fetch(target.url, { headers: target.headers }), generation: target.generation }
+    const request = new Request(target.url, { headers: target.headers })
+    return { response: await (relayed ? relayed.fetch(request) : fetch(request)), generation: target.generation }
   }
   const first = await open()
   if (first.response.status !== 401) return first.response

@@ -20,6 +20,10 @@
     "./vercel": {
       "types": "./dist/vercel/index.d.ts",
       "default": "./dist/vercel/index.js"
+    },
+    "./relay": {
+      "types": "./dist/relay/index.d.ts",
+      "default": "./dist/relay/index.js"
     }
   },
   "files": [
@@ -32,17 +36,26 @@
     "test": "node --test --test-reporter=spec 'test/*.test.ts'"
   },
   "peerDependencies": {
-    "undici": ">=7.0.0"
+    "undici": ">=7.0.0",
+    "ws": ">=8.0.0"
   },
   "peerDependenciesMeta": {
     "undici": {
+      "optional": true
+    },
+    "ws": {
       "optional": true
     }
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20261016.1",
     "@types/node": "22.20.5",
+    "@types/ws": "^8.18.2",
     "typescript": "6.0.2",
-    "undici": "7.30.1"
+    "undici": "7.30.1",
+    "ws": "^8.22.0"
+  },
+  "bin": {
+    "nanocode-egress-relay": "./dist/relay/main.js"
   }
 }

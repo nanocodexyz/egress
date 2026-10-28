@@ -25,6 +25,7 @@
     "src/*.ts",
     "src/internal/*.ts",
     "src/vercel/*.ts",
-    "src/cloudflare/Egress.ts"
+    "src/cloudflare/Egress.ts",
+    "src/relay/Relay.ts"
   ]
 }
