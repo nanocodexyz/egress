@@ -135,7 +135,7 @@ export async function deployProductionBroker(environment = process.env) {
       "--tag",
       revision,
       "--message",
-      `gakonst/nanocodex@${revision}`,
+      `nanocodexyz/nanocode@${revision}`,
       "--secrets-file",
       paths["broker-secrets.json"],
     ], {
