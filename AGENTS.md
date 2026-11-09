@@ -4,6 +4,21 @@ This repository (nanocodexyz/egress, MIT or Apache-2.0) is `nanocode-egress`, an
 
 nanocode-ts wraps this package so a deployment writes no plan code (nanocodexyz/nanocode-ts#169, #171 and #172, from `build-a9ab16b` on): `App.create({ plans: { vault, relay, account } })` on Cloudflare and `App.create({ account, plans })` on Vercel build the binding, vault, `subscription` and sign-in routes from the pieces below, `PlanVault` and `RelayContainer` are re-exported from `nanocode-ts/cloudflare`, and `nanocode-ts/client`'s `Plans.create` and `Plans.serves` and `nanocode-ts/react`'s `usePlans` and `PlanConnect` are the browser side. A plan serves only its vendor's models (Anthropic's `claude-` and OpenAI's `gpt-` ones), so nanocode-ts keeps other models of a signed-in provider on the deployment's gateway. On 2026-10-28 nanocodexyz/durable-cloudflare (`284a50e`, nanocode.xyz/cloudflare, with the relay container) and nanocodexyz/durable-vercel (`edd9212`, nanocode.xyz/vercel) shipped visitor sign-in this way; both refuse a request without the visitor's identifier with 401, and `/plans` answered a new visitor with both plans `signed_out`.
 
+## Principles
+
+These principles come from nanocodexyz/nanocode's `AGENTS.md` and apply to every change here.
+
+- Keep code simple and changes small. Match the surrounding code and preserve unrelated work.
+- No new code comments, doc comments, README edits, tests or test-only dependencies.
+- No magic constants or arbitrary caps: a limit comes from a protocol, a measurement or caller policy. Surface invalid states; never hide them with silent truncation, clamping or fallbacks.
+- Make invalid states unrepresentable: model a lifecycle as one discriminated union whose variants carry only what that phase has.
+- Preserve public APIs.
+- Inference, subagents and durability live in the brain; Code Mode runs on the user's machine. Never silently replay dispatched work: report uncertain outcomes.
+- Validate with `npm run check:types` and the existing `npm test`, and back performance changes with reproducible before/after measurements.
+- Check behavior with harnesses in ignored `output/`. Keep every artifact there; never commit them, credentials or personal data.
+- Work on `main` in the main checkout, commit only your own changes and push each one; no pull requests. There is no CI: build, release and deploy by hand. Use subagents only when asked.
+- This file holds principles only; history belongs in commit messages.
+
 ## Library
 
 - `ChatGpt` and `Claude` port the nanocode SDK's `ChatGptSubscription` (crates/backends/codex/client/src/auth/subscription.rs) and `ClaudeSubscription` (crates/backends/claude/client/src/subscription.rs) with the same endpoints, OAuth clients, scopes, stored JSON and refresh rules: ChatGPT's device authorization at auth.openai.com (`start` returns the code for `/codex/device`, `status` polls after the interval, refreshes single-flight per generation, a stale rejection does not refresh twice), and Claude's PKCE authorization at claude.com with Anthropic's manual code page (`start`, `complete` with the pasted `code#state` or the callback URL, profile validation, account on hold, refreshes that keep the account and organization, `reject` after a 401, sign-out that revokes the refresh token). Claude's envelope binding is the SHA-256 of the configuration in the SDK's field order, so state is interchangeable with the SDK's.
