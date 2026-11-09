@@ -35,4 +35,4 @@ Checked on 2026-10-28 with the tests above and nanocode-ts#167's `src/vercel/Har
 
 `prototypes/` holds the code this started from, recovered from nanocodexyz/nanocode's history: `examples/cloudflare-egress` at ef31ecf7d~1 (a broker Worker behind a Service Binding with a singleton Codex OAuth Durable Object and placeholder replacement, after iron-proxy), `js/account/worker`'s subscription auth, credential vault and ChatGPT egress at 2d4a4c539~1, and `examples/cloudflare-workers`' subscription egress scripts at bb476038f and 65e92da38.
 
-Every push to main runs `.github/workflows/release.yml`: `npm ci` (whose `prepare` builds `dist`), the type checks and tests, and a GitHub release `build-<sha>` with `nanocode-egress-<sha>.tgz`, the packed package with `dist` built, which installs without a build step, as nanocode-ts's `build-<sha>` releases do.
+`node scripts/release.mjs` publishes the pushed `HEAD` by hand: `npm ci` (whose `prepare` builds `dist`), the type checks and tests, and a GitHub release `build-<sha>` with `nanocode-egress-<sha>.tgz`, the packed package with `dist` built, which installs without a build step, as nanocode-ts's `build-<sha>` releases do.
