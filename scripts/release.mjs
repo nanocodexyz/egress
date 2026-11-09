@@ -27,7 +27,7 @@ try {
   run(['npm', 'run', 'check:types'])
   run(['npm', 'test'])
   const tarball = join(scratch, 'nanocode-egress-' + short + '.tgz')
-  renameSync(join(scratch, read(['npm', 'pack', '--ignore-scripts', '--silent', '--pack-destination', scratch])), tarball)
+  renameSync(join(scratch, read(['npm', 'pack', '--ignore-scripts', '--silent', '--pack-destination', scratch]).split('\n').pop()), tarball)
   run([
     'gh',
     'release',
