@@ -120,7 +120,24 @@ export function binding<E>(options: binding.Options<E>): (env: E) => PrivateBind
           }
         }
         if (pathname === '/metrics' && !fallback) return Response.json({ ok: true, egress: 'plans' })
-        if (pathname === '/warm' && !fallback) return new Response(null, { status: 204 })
+        if (pathname === '/warm' && request.method === 'POST') {
+          const dispatch = header<ModelDispatch>(request, 'x-nanocode-model')
+          if (dispatch?.subscription && dispatch.authority) {
+            const provider = dispatch.provider ?? 'claude'
+            try {
+              await Promise.all([
+                options.plans(env, dispatch.authority.account_id).inject(provider),
+                provider === 'codex' && relayed
+                  ? relayed.fetch(new Request(Core.codexResponses)).then((response) => response.body?.cancel())
+                  : undefined,
+              ])
+            } catch (error) {
+              return planFailure(provider, error)
+            }
+            return new Response(null, { status: 204 })
+          }
+          if (!fallback) return new Response(null, { status: 204 })
+        }
         return forward(request)
       },
     }
