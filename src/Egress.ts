@@ -94,34 +94,60 @@ export async function send(account: Plans.Account, request: Request, options: se
   const fetcher = options.fetch ?? ((input, init) => fetch(input, init))
   const incoming = [...request.headers]
 
-  const attempt = async () => {
-    const injection = await account.inject(request.provider)
-    const response = await fetcher(url.toString(), {
+  const dispatch = (injection: Plans.Injection, signal: AbortSignal | undefined) =>
+    fetcher(url.toString(), {
       method: request.method ?? 'POST',
       headers: headers(incoming, injection),
       ...(request.body ? { body: request.body as Uint8Array<ArrayBuffer> } : {}),
       redirect: 'manual',
-      ...(options.signal ? { signal: options.signal } : {}),
+      ...(signal ? { signal } : {}),
     })
-    return { response, injection }
+
+  const inject = async () => {
+    try {
+      const injection = await account.inject(request.provider)
+      if (options.remembered) options.remembered.injection = injection
+      return injection
+    } catch (error) {
+      if (options.remembered) options.remembered.injection = undefined
+      throw error
+    }
   }
 
-  const first = await attempt()
+  const attempt = async (known: Plans.Injection | undefined) => {
+    if (!known) {
+      const injection = await inject()
+      return { response: await dispatch(injection, options.signal), injection }
+    }
+    const checked = new AbortController()
+    const responding = dispatch(known, options.signal ? AbortSignal.any([checked.signal, options.signal]) : checked.signal)
+    void responding.catch(() => undefined)
+    await inject().catch((error: unknown) => {
+      checked.abort(error)
+      throw error
+    })
+    return { response: await responding, injection: known }
+  }
+
+  const first = await attempt(options.remembered?.injection)
   if (first.response.status !== 401) return guard(first.response)
 
   await first.response.body?.cancel().catch(() => undefined)
   await account.rejected(request.provider, { generation: first.injection.generation })
-  return guard((await attempt()).response)
+  return guard((await attempt(undefined)).response)
 }
 
 export declare namespace send {
   type Options = {
     /** `fetch` of the model request. Defaults to the global `fetch`. */
     fetch?: Http.Fetch | undefined
+    remembered?: Remembered | undefined
     /** Signal that cancels the request. */
     signal?: AbortSignal | undefined
   }
 }
+
+export type Remembered = { injection: Plans.Injection | undefined }
 
 /** Returns the URL and headers that open a Codex WebSocket on `account`'s ChatGPT plan, and the generation they carry. */
 export async function socket(

@@ -72,6 +72,15 @@ export function durable<E>(namespace: (env: E) => Namespace): (env: E, account: 
 
 /** Returns the `egress` of `App.create`: plan requests get the account's credential, and the rest go to `options.fallback`. */
 export function binding<E>(options: binding.Options<E>): (env: E) => PrivateBinding {
+  const remembered = new Map<string, Core.Remembered>()
+  const recall = (account: string, provider: Plans.Provider) => {
+    const key = JSON.stringify([account, provider])
+    const known = remembered.get(key)
+    if (known) return known
+    const created: Core.Remembered = { injection: undefined }
+    remembered.set(key, created)
+    return created
+  }
   return (env) => {
     const fallback = options.fallback?.(env)
     const relayed = options.relay?.(env)
@@ -102,7 +111,11 @@ export function binding<E>(options: binding.Options<E>): (env: E) => PrivateBind
                 headers: dispatch.headers,
                 body: new Uint8Array(await request.arrayBuffer()),
               },
-              { signal: request.signal, ...(provider === 'codex' && codexFetch ? { fetch: codexFetch } : {}) },
+              {
+                remembered: recall(dispatch.authority.account_id, provider),
+                signal: request.signal,
+                ...(provider === 'codex' && codexFetch ? { fetch: codexFetch } : {}),
+              },
             )
           } catch (error) {
             return planFailure(provider, error)
@@ -126,7 +139,12 @@ export function binding<E>(options: binding.Options<E>): (env: E) => PrivateBind
             const provider = dispatch.provider ?? 'claude'
             try {
               await Promise.all([
-                options.plans(env, dispatch.authority.account_id).inject(provider),
+                options
+                  .plans(env, dispatch.authority.account_id)
+                  .inject(provider)
+                  .then((injection) => {
+                    recall(dispatch.authority.account_id, provider).injection = injection
+                  }),
                 provider === 'codex' && relayed
                   ? relayed.fetch(new Request(Core.codexResponses)).then((response) => response.body?.cancel())
                   : undefined,
