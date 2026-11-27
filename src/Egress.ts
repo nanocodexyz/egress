@@ -3,15 +3,19 @@
  *
  * @module
  */
-import type * as Http from './internal/Http.ts'
+import * as Http from './internal/Http.ts'
 import type * as Plans from './Plans.ts'
 
 /** URL of the Codex Responses API of ChatGPT plans, which Codex WebSockets open. */
 export const codexResponses = 'https://chatgpt.com/backend-api/codex/responses'
 
-const destinations: Record<Plans.Provider, { origin: string; paths: readonly string[]; query?: string }> = {
-  claude: { origin: 'https://api.anthropic.com', paths: ['/v1/messages', '/v1/messages/count_tokens'], query: '?beta=true' },
-  codex: { origin: 'https://chatgpt.com', paths: ['/backend-api/codex/responses', '/backend-api/codex/responses/compact'] },
+const destinations: Record<Plans.Provider, { origin: string; targets: readonly string[] }> = {
+  antigravity: {
+    origin: 'https://daily-cloudcode-pa.googleapis.com',
+    targets: ['/v1internal:generateContent', '/v1internal:streamGenerateContent?alt=sse'],
+  },
+  claude: { origin: 'https://api.anthropic.com', targets: ['/v1/messages?beta=true', '/v1/messages/count_tokens?beta=true'] },
+  codex: { origin: 'https://chatgpt.com', targets: ['/backend-api/codex/responses', '/backend-api/codex/responses/compact'] },
 }
 
 const decodable = new Set(['gzip', 'x-gzip', 'deflate', 'br'])
@@ -24,6 +28,8 @@ const dropped = new Set([
   'proxy-authorization',
   'chatgpt-account-id',
   'x-openai-fedramp',
+  'x-goog-api-key',
+  'x-goog-user-project',
   'host',
   'content-length',
   'connection',
@@ -61,13 +67,7 @@ export function destination(provider: Plans.Provider, endpoint: string): URL {
     throw new DestinationError(`${endpoint} is not a URL`)
   }
   const allowed = destinations[provider]
-  if (
-    url.origin !== allowed.origin ||
-    !allowed.paths.includes(url.pathname) ||
-    url.search !== (allowed.query ?? '') ||
-    url.username ||
-    url.password
-  )
+  if (url.origin !== allowed.origin || !allowed.targets.includes(url.pathname + url.search) || url.username || url.password)
     throw new DestinationError(`a ${provider} plan does not serve ${url.origin}${url.pathname}`)
   return url
 }
@@ -94,14 +94,16 @@ export async function send(account: Plans.Account, request: Request, options: se
   const fetcher = options.fetch ?? ((input, init) => fetch(input, init))
   const incoming = [...request.headers]
 
-  const dispatch = (injection: Plans.Injection, signal: AbortSignal | undefined) =>
-    fetcher(url.toString(), {
+  const dispatch = (injection: Plans.Injection, signal: AbortSignal | undefined) => {
+    const payload = body(request, injection)
+    return fetcher(url.toString(), {
       method: request.method ?? 'POST',
       headers: headers(incoming, injection),
-      ...(request.body ? { body: request.body as Uint8Array<ArrayBuffer> } : {}),
+      ...(payload ? { body: payload as Uint8Array<ArrayBuffer> } : {}),
       redirect: 'manual',
       ...(signal ? { signal } : {}),
     })
+  }
 
   const inject = async () => {
     try {
@@ -129,7 +131,8 @@ export async function send(account: Plans.Account, request: Request, options: se
     return { response: await responding, injection: known }
   }
 
-  const first = await attempt(options.remembered?.injection)
+  const known = options.remembered?.injection
+  const first = await attempt(known && (known.expires_at === undefined || known.expires_at > Http.now()) ? known : undefined)
   if (first.response.status !== 401) return guard(first.response)
 
   await first.response.body?.cancel().catch(() => undefined)
@@ -156,6 +159,26 @@ export async function socket(
 ): Promise<{ url: string; headers: Headers; generation: string }> {
   const injection = await account.inject('codex')
   return { url: codexResponses, headers: headers(incoming, injection), generation: injection.generation }
+}
+
+function body(request: Request, injection: Plans.Injection): Uint8Array | null {
+  if (request.provider !== 'antigravity' || !request.body) return request.body
+
+  let wrapped: unknown
+  try {
+    wrapped = JSON.parse(new TextDecoder().decode(request.body))
+  } catch {
+    throw new DestinationError('an antigravity plan request needs a JSON object body')
+  }
+  if (!wrapped || typeof wrapped !== 'object' || Array.isArray(wrapped))
+    throw new DestinationError('an antigravity plan request needs a JSON object body')
+
+  const fields = wrapped as Record<string, unknown>
+  const project = injection.project ?? ''
+  if (fields.project !== undefined && fields.project !== project)
+    throw new DestinationError('an antigravity plan serves only the project of its sign-in')
+  if (fields.project === project || (fields.project === undefined && !project)) return request.body
+  return new TextEncoder().encode(JSON.stringify({ ...fields, project }))
 }
 
 function guard(response: Response): Response {

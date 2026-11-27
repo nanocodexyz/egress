@@ -12,6 +12,8 @@ import * as Vault from '../Vault.ts'
 export type Env = {
   /** Secret of at least 32 characters that seals stored credentials. */
   PLAN_SECRET: string
+  ANTIGRAVITY_CLIENT_ID?: string | undefined
+  ANTIGRAVITY_CLIENT_SECRET?: string | undefined
 }
 
 /** Plans of the account this object is named after; its methods are the `Plans.Account` contract over RPC. */
@@ -48,7 +50,12 @@ export class PlanVault<E extends Env = Env> extends DurableObject<E> implements 
           return options.revision + 1
         },
       }
-      return Plans.account(Vault.sealed(store, await Vault.create(this.env.PLAN_SECRET)), { account: 'owner' })
+      const id = this.env.ANTIGRAVITY_CLIENT_ID
+      const secret = this.env.ANTIGRAVITY_CLIENT_SECRET
+      return Plans.account(Vault.sealed(store, await Vault.create(this.env.PLAN_SECRET)), {
+        account: 'owner',
+        ...(id && secret ? { antigravity: { client_id: id, client_secret: secret } } : {}),
+      })
     })()
     return this.opened
   }

@@ -239,8 +239,10 @@ function planFailure(provider: Plans.Provider, error: unknown): Response {
   const message = error instanceof Error ? error.message : String(error)
   if (error instanceof Core.DestinationError) return failure(provider, 403, message)
   const signedOut = /not signed in|not authenticated|sign in again|login|on hold|no sign-in/i.test(message)
-  return failure(provider, signedOut ? 401 : 502, signedOut ? `sign in to your ${provider === 'codex' ? 'ChatGPT' : 'Claude'} plan: ${message}` : message)
+  return failure(provider, signedOut ? 401 : 502, signedOut ? `sign in to your ${planName[provider]} plan: ${message}` : message)
 }
+
+const planName: Record<Plans.Provider, string> = { antigravity: 'Antigravity', claude: 'Claude', codex: 'ChatGPT' }
 
 function failure(provider: Plans.Provider, status: number, message: string): Response {
   const type = status === 401 ? 'authentication_error' : status === 403 ? 'permission_error' : 'api_error'

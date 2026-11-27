@@ -1,3 +1,4 @@
+export * as Antigravity from './Antigravity.ts'
 export * as ChatGpt from './ChatGpt.ts'
 export * as Claude from './Claude.ts'
 export * as Egress from './Egress.ts'

@@ -4,6 +4,7 @@
  *
  * @module
  */
+import type * as Antigravity from '../Antigravity.ts'
 import * as Core from '../Egress.ts'
 import * as Plans from '../Plans.ts'
 import * as Routes from '../Routes.ts'
@@ -50,7 +51,10 @@ export function plans(options: plans.Options): (account: string) => Plans.Accoun
       return Vault.sealed(options.store, await vault).compareAndSwap(key, swap)
     },
   }
-  return (account) => Plans.account(store, { account })
+  const id = options.antigravity?.client_id ?? process.env.ANTIGRAVITY_CLIENT_ID
+  const clientSecret = options.antigravity?.client_secret ?? process.env.ANTIGRAVITY_CLIENT_SECRET
+  const antigravity = id && clientSecret ? { client_id: id, client_secret: clientSecret } : undefined
+  return (account) => Plans.account(store, { account, ...(antigravity ? { antigravity } : {}) })
 }
 
 export declare namespace plans {
@@ -59,6 +63,7 @@ export declare namespace plans {
     store: Store.Store
     /** Secret of at least 32 characters that seals stored credentials. Defaults to `PLAN_SECRET`. */
     secret?: string | undefined
+    antigravity?: Antigravity.Client | undefined
   }
 }
 

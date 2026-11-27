@@ -1,8 +1,8 @@
 /**
  * HTTP routes of plan sign-in for a signed-in account, which both adapters serve.
  *
- * `GET {prefix}` returns both plans' status, `POST {prefix}/{claude|codex}/sign-in` starts a sign-in,
- * `POST {prefix}/claude/complete` finishes Claude's with `{ code }`, and `DELETE {prefix}/{claude|codex}` signs out.
+ * `GET {prefix}` returns the plans' status, `POST {prefix}/{antigravity|claude|codex}/sign-in` starts a sign-in,
+ * `POST {prefix}/{antigravity|claude}/complete` finishes one with `{ code }`, and `DELETE {prefix}/{antigravity|claude|codex}` signs out.
  *
  * @module
  */
@@ -15,7 +15,7 @@ export async function handle(request: Request, options: handle.Options): Promise
   if (path !== prefix && !path.startsWith(prefix + '/')) return undefined
 
   const parts = path.slice(prefix.length).split('/').filter(Boolean)
-  const provider = parts[0] === 'claude' || parts[0] === 'codex' ? parts[0] : undefined
+  const provider = parts[0] === 'antigravity' || parts[0] === 'claude' || parts[0] === 'codex' ? parts[0] : undefined
 
   const run = async (operation: (account: Plans.Account) => Promise<unknown>): Promise<Response> => {
     const account = await options.account(request)
@@ -25,7 +25,13 @@ export async function handle(request: Request, options: handle.Options): Promise
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       const name = error instanceof Error ? error.name : ''
-      const status = /LoginRequired|NotAuthenticated|AccountOnHold/.test(name) ? 409 : /Invalid/.test(name) ? 400 : 502
+      const status = /LoginRequired|NotAuthenticated|AccountOnHold/.test(name)
+        ? 409
+        : /Invalid/.test(name)
+          ? 400
+          : /Unavailable/.test(name)
+            ? 503
+            : 502
       return Response.json({ error: message, kind: name || undefined }, { status })
     }
   }
@@ -36,11 +42,16 @@ export async function handle(request: Request, options: handle.Options): Promise
     const redirect = typeof body.redirect === 'string' ? body.redirect : undefined
     return run((account) => account.signIn({ provider, redirect }))
   }
-  if (provider === 'claude' && parts.length === 2 && parts[1] === 'complete' && request.method === 'POST') {
+  if (
+    (provider === 'antigravity' || provider === 'claude') &&
+    parts.length === 2 &&
+    parts[1] === 'complete' &&
+    request.method === 'POST'
+  ) {
     const body = (await request.json().catch(() => ({}))) as { code?: unknown }
     if (typeof body.code !== 'string') return Response.json({ error: 'complete takes { code }' }, { status: 400 })
     const code = body.code
-    return run((account) => account.complete({ code }))
+    return run((account) => account.complete({ code, provider }))
   }
   if (provider && parts.length === 1 && request.method === 'DELETE')
     return run((account) => account.signOut({ provider }))

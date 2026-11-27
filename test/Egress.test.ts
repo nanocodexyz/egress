@@ -17,7 +17,11 @@ function account(): Plans.Account & { rejections: string[]; generation: number }
       return state.rejections
     },
     async status() {
-      return { claude: { state: 'signed_out' }, codex: { state: 'authenticated', account_id: 'acct', expires_at: null } }
+      return {
+        antigravity: { state: 'signed_out' },
+        claude: { state: 'signed_out' },
+        codex: { state: 'authenticated', account_id: 'acct', expires_at: null },
+      }
     },
     async signedIn(provider) {
       return provider === 'codex'
